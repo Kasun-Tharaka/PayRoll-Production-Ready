@@ -1,80 +1,166 @@
-# connection and queries - SQLite
-
 import sqlite3
 import pandas as pd
 from datetime import datetime
+import hashlib
 
 DB_NAME = "property_payroll.db"
 
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
 def init_db():
-    """Create the database tables if they don't exist."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # Table to store monthly payroll history
-    # We store the most important columns for reporting
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS payroll_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            emp_id TEXT,
-            emp_name TEXT,
-            month TEXT,
-            year INTEGER,
-            basic_salary REAL,
-            gross_salary REAL,
-            total_deduction REAL,
-            net_salary REAL,
-            epf_company REAL,
-            etf_company REAL,
-            processed_date TIMESTAMP
-        )
-    ''')
+    # 1. Ensure the base table exists
+    c.execute('''CREATE TABLE IF NOT EXISTS payroll_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                emp_id TEXT, 
+                emp_name TEXT, 
+                month TEXT, 
+                year INTEGER, 
+                basic_salary REAL, 
+                gross_salary REAL, 
+                epf_employee REAL, 
+                total_deduction REAL, 
+                net_salary REAL, 
+                processed_date TIMESTAMP)''')
+
+    # MIGRATION: Automatically add missing columns if they don't exist
+    needed_columns = [
+        "nopay_amount REAL",
+        "total_tax REAL",
+        "epf_company REAL",
+        "etf_company REAL"
+    ]
+    
+    for col_def in needed_columns:
+        col_name = col_def.split()[0]
+        try:
+            c.execute(f"ALTER TABLE payroll_history ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            # Column already exists, skip it
+            pass
+
+    # 2. Employee Master
+    c.execute('CREATE TABLE IF NOT EXISTS employees (emp_id TEXT PRIMARY KEY, name TEXT, designation TEXT, department TEXT, nic TEXT, bank_name TEXT, account_no TEXT, joined_date TEXT)')
+
+    # 3. User Table
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY, 
+                password TEXT, 
+                role TEXT)''')
+    
+    # Create default admin if not exists
+    c.execute("SELECT * FROM users WHERE username='admin'")
+    if not c.fetchone():
+        admin_pw = hash_password("admin123")
+        c.execute("INSERT INTO users VALUES ('admin', ?, 'Admin')", (admin_pw,))
+        
     conn.commit()
     conn.close()
 
-def save_payroll_to_db(df, month, year):
-    """
-    Saves the processed dataframe to SQLite.
-    Assumes df has columns: 'Employee ID', 'Name' (You must ensure Excel has these)
-    """
+# --- USER MANAGEMENT ---
+def add_user(username, password, role):
     conn = sqlite3.connect(DB_NAME)
-    
-    # Add metadata columns
-    df['month'] = month
-    df['year'] = year
-    df['processed_date'] = datetime.now()
-    
-    # We map the DataFrame columns to the Database columns
-    # This requires renaming columns temporarily to match DB schema or just dumping raw
-    # For simplicity, let's dump specific columns we care about:
-    
-    # Check if Employee ID and Name exist in Excel, if not, handle gracefully
-    if 'Employee ID' not in df.columns:
-        df['Employee ID'] = 'Unknown'
-    if 'Name' not in df.columns:
-        df['Name'] = 'Unknown'
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hash_password(password), role))
+        conn.commit()
+        return True
+    except: return False
+    finally: conn.close()
 
-    subset = df[[
-        'Employee ID', 'Name', 'month', 'year', 
-        'Basic salary', 'Gross Salary', 'Total Deduction', 'Net Salary', 
-        'EPF_Company_Amt', 'ETF_Company_Amt', 'processed_date'
-    ]].copy()
+def get_all_users():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT username, role FROM users", conn)
+    conn.close()
+    return df
+
+def delete_user(username):
+    if username == 'admin': return False 
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM users WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    return True
+
+def login_user(username, password):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT role FROM users WHERE username=? AND password=?", (username, hash_password(password)))
+    user = c.fetchone()
+    conn.close()
+    return user[0] if user else None
+
+# --- EMPLOYEE MANAGEMENT ---
+def add_employee(emp_id, name, desig, dept, nic, bank, acc_no, date):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute('INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (emp_id, name, desig, dept, nic, bank, acc_no, date))
+        conn.commit()
+        return True
+    except: return False
+    finally: conn.close()
+
+def update_employee(emp_id, name, desig, dept, nic, bank, acc_no, date):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('UPDATE employees SET name=?, designation=?, department=?, nic=?, bank_name=?, account_no=?, joined_date=? WHERE emp_id=?', (name, desig, dept, nic, bank, acc_no, date, emp_id))
+    conn.commit()
+    conn.close()
+
+def delete_employee(emp_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM employees WHERE emp_id=?", (emp_id,))
+    conn.commit()
+    conn.close()
+
+def get_all_employees():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM employees", conn)
+    conn.close()
+    return df
+
+def get_employee_by_id(emp_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM employees WHERE emp_id=?", (emp_id,))
+    data = c.fetchone()
+    conn.close()
+    return data
+
+# --- HISTORY ---
+def save_payroll_to_db(df, month, year):
+    conn = sqlite3.connect(DB_NAME)
+    db_data = df.copy()
+    db_data['month'] = month
+    db_data['year'] = year
+    db_data['processed_date'] = datetime.now()
     
-    # Rename for DB matching
+    # Mapping columns to match DB schema exactly
+    subset = db_data[[
+        'Employee ID', 'Name', 'month', 'year', 
+        'Basic salary', 'Gross Salary', 'Nopay Amount', 'Total_Tax', 
+        'EPF_Employee_Amt', 'Total Deduction', 'Net Salary', 
+        'EPF_Company_Amt', 'ETF_Company_Amt', 'processed_date'
+    ]]
+    
     subset.columns = [
         'emp_id', 'emp_name', 'month', 'year',
-        'basic_salary', 'gross_salary', 'total_deduction', 'net_salary',
+        'basic_salary', 'gross_salary', 'nopay_amount', 'total_tax',
+        'epf_employee', 'total_deduction', 'net_salary',
         'epf_company', 'etf_company', 'processed_date'
     ]
     
-    # Append to database
     subset.to_sql('payroll_history', conn, if_exists='append', index=False)
     conn.close()
 
 def fetch_history(month, year):
-    """Retrieve history for a specific month."""
     conn = sqlite3.connect(DB_NAME)
-    query = "SELECT * FROM payroll_history WHERE month=? AND year=?"
-    df = pd.read_sql(query, conn, params=(month, year))
+    df = pd.read_sql("SELECT * FROM payroll_history WHERE month=? AND year=?", conn, params=(month, year))
     conn.close()
     return df
