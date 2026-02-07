@@ -21,15 +21,16 @@ def init_db():
                 year INTEGER, 
                 basic_salary REAL, 
                 gross_salary REAL, 
-                epf_employee REAL, 
                 total_deduction REAL, 
                 net_salary REAL, 
                 processed_date TIMESTAMP)''')
 
     # MIGRATION: Automatically add missing columns if they don't exist
+    # I have added epf_employee to this list to fix your specific error.
     needed_columns = [
         "nopay_amount REAL",
         "total_tax REAL",
+        "epf_employee REAL",
         "epf_company REAL",
         "etf_company REAL"
     ]
@@ -39,7 +40,7 @@ def init_db():
         try:
             c.execute(f"ALTER TABLE payroll_history ADD COLUMN {col_def}")
         except sqlite3.OperationalError:
-            # Column already exists, skip it
+            # Column already exists or table is locked, skip it
             pass
 
     # 2. Employee Master

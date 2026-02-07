@@ -1,147 +1,6 @@
-# import streamlit as st
-# import pandas as pd
-# from processor import process_payroll_data
-# from database import (init_db, save_payroll_to_db, fetch_history, add_employee, 
-#                       update_employee, delete_employee, get_all_employees, 
-#                       get_employee_by_id, login_user, add_user, get_all_users, delete_user)
-# from pdf_gen import generate_zip_payslips, create_single_pdf
-
-# init_db()
-# st.set_page_config(page_title="Pitch Capital Payroll", layout="wide")
-
-# # --- LOGIN LOGIC ---
-# if 'logged_in' not in st.session_state:
-#     st.session_state['logged_in'] = False
-#     st.session_state['user_role'] = None
-
-# def login_page():
-#     st.title("🔐 Payroll System Login")
-#     with st.container():
-#         user = st.text_input("Username")
-#         pw = st.text_input("Password", type="password")
-#         if st.button("Login"):
-#             role = login_user(user, pw)
-#             if role:
-#                 st.session_state['logged_in'] = True
-#                 st.session_state['user_role'] = role
-#                 st.rerun()
-#             else:
-#                 st.error("Invalid Username or Password")
-
-# if not st.session_state['logged_in']:
-#     login_page()
-#     st.stop()
-
-# # --- MAIN APP (ONLY SHOWN IF LOGGED IN) ---
-# st.sidebar.title(f"Welcome, {st.session_state['user_role']}")
-# if st.sidebar.button("Logout"):
-#     st.session_state['logged_in'] = False
-#     st.rerun()
-
-# st.sidebar.markdown("---")
-# st.sidebar.header("⚙️ Global Settings")
-# sel_month = st.sidebar.selectbox("Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"])
-# sel_year = st.sidebar.number_input("Year", value=2026)
-# working_days = st.sidebar.number_input("Working Days", value=30)
-# stamps_fee = st.sidebar.number_input("Stamps Fee", value=25.0)
-
-# config = {
-#     'working_days': working_days,
-#     'stamps_fee': stamps_fee,
-#     'epf_emp_rate': 0.08, 'epf_co_rate': 0.12, 'etf_co_rate': 0.03
-# }
-
-# # --- NAVIGATION TABS ---
-# tabs = ["🚀 Payroll Processing", "👥 Employee Management", "📜 History"]
-# if st.session_state['user_role'] == 'Admin':
-#     tabs.append("🔑 User Administration")
-
-# selected_tabs = st.tabs(tabs)
-
-# # TAB 1: PAYROLL
-# with selected_tabs[0]:
-#     uploaded_file = st.file_uploader("Upload Excel", type=['xlsx'])
-#     if uploaded_file:
-#         df_input = pd.read_excel(uploaded_file)
-#         if st.button("Calculate Payroll"):
-#             st.session_state['result'] = process_payroll_data(df_input, config)
-        
-#         if 'result' in st.session_state:
-#             df_final = st.session_state['result']
-#             st.dataframe(df_final)
-            
-#             c1, c2 = st.columns(2)
-#             zip_data = generate_zip_payslips(df_final, sel_month, sel_year)
-#             c1.download_button("📦 Download All (ZIP)", zip_data, f"Payslips_{sel_month}.zip")
-#             if c2.button("💾 Save to History DB"):
-#                 save_payroll_to_db(df_final, sel_month, sel_year)
-#                 st.success("Saved!")
-
-#             # INDIVIDUAL DOWNLOADS (RESTORED)
-#             st.divider()
-#             st.subheader("👤 Individual Downloads")
-#             for i, row in df_final.iterrows():
-#                 with st.expander(f"{row['Employee ID']} - {row['Name']}"):
-#                     pdf_bytes = create_single_pdf(row, sel_month, sel_year)
-#                     st.download_button("Download PDF", pdf_bytes, f"{row['Employee ID']}.pdf", key=f"dl_{i}")
-
-# # TAB 2: EMPLOYEES
-# with selected_tabs[1]:
-#     st.header("Manage Employees")
-#     df_emps = get_all_employees()
-#     st.dataframe(df_emps)
-    
-#     col_add, col_edit = st.columns(2)
-#     with col_add:
-#         with st.form("add_emp"):
-#             st.subheader("Add Employee")
-#             eid = st.text_input("ID"); enm = st.text_input("Name"); edsg = st.text_input("Designation")
-#             edpt = st.text_input("Dept"); enic = st.text_input("NIC"); ebnk = st.text_input("Bank")
-#             eacc = st.text_input("Account"); ejn = st.text_input("Joined Date")
-#             if st.form_submit_button("Save"):
-#                 if add_employee(eid, enm, edsg, edpt, enic, ebnk, eacc, ejn): st.rerun()
-#     with col_edit:
-#         if not df_emps.empty:
-#             target = st.selectbox("Select ID", df_emps['emp_id'].tolist())
-#             if st.button("Delete Employee", type="primary"):
-#                 delete_employee(target); st.rerun()
-
-# # TAB 3: HISTORY
-# with selected_tabs[2]:
-#     if st.button("Fetch Records"):
-#         st.dataframe(fetch_history(sel_month, sel_year))
-
-# # TAB 4: USER ADMIN (ONLY VISIBLE TO ADMIN)
-# if st.session_state['user_role'] == 'Admin':
-#     with selected_tabs[3]:
-#         st.header("🔑 User Management")
-        
-#         u_col1, u_col2 = st.columns(2)
-#         with u_col1:
-#             st.subheader("Add New User")
-#             with st.form("new_user"):
-#                 new_u = st.text_input("Username")
-#                 new_p = st.text_input("Password", type="password")
-#                 new_r = st.selectbox("Role", ["Staff", "Admin"])
-#                 if st.form_submit_button("Create User"):
-#                     if add_user(new_u, new_p, new_r): st.success("User Added"); st.rerun()
-#                     else: st.error("User exists")
-        
-#         with u_col2:
-#             st.subheader("Current Users")
-#             user_list = get_all_users()
-#             st.dataframe(user_list)
-#             del_u = st.selectbox("Delete User", user_list['username'].tolist())
-#             if st.button("Remove User"):
-#                 if delete_user(del_u): st.rerun()
-#                 else: st.error("Cannot delete master admin")
-
-
-
-
 import streamlit as st
 import pandas as pd
-import io
+import os  # Added to check if logo file exists
 from processor import process_payroll_data
 from database import (init_db, save_payroll_to_db, fetch_history, add_employee, 
                       update_employee, delete_employee, get_all_employees, 
@@ -177,8 +36,21 @@ if not st.session_state['logged_in']:
     login_page()
     st.stop()
 
-# --- MAIN INTERFACE (RESTORED SIDEBAR) ---
+# ==========================================
+# SIDEBAR SETUP
+# ==========================================
+
+# --- NEW: COMPANY LOGO ---
+# Make sure you have a file named 'logo.png' in your project folder
+if os.path.exists("logo.png"):
+    st.sidebar.image("logo.png", use_container_width=True)
+else:
+    # Fallback if no logo is found
+    st.sidebar.header("🏢 Pitch Capital")
+
+# Welcome Message
 st.sidebar.title(f"Welcome, {st.session_state['user_role']}")
+
 if st.sidebar.button("Logout"):
     st.session_state['logged_in'] = False
     st.rerun()
@@ -194,7 +66,7 @@ st.sidebar.subheader("Calculation Constants")
 working_days = st.sidebar.number_input("Working Days", value=30)
 stamps_fee = st.sidebar.number_input("Stamps Fee (LKR)", value=25.0)
 
-# RESTORED: Statutory Rate Sliders
+# Statutory Rate Sliders
 st.sidebar.subheader("Statutory Rates (%)")
 epf_emp = st.sidebar.slider("EPF Employee Contribution (%)", 0, 15, 8) / 100
 epf_co = st.sidebar.slider("EPF Employer Contribution (%)", 0, 20, 12) / 100
@@ -225,7 +97,7 @@ with selected_tabs[0]:
     if uploaded_file:
         df_input = pd.read_excel(uploaded_file)
         
-        # RESTORED: Excel Data Preview
+        # Excel Data Preview
         st.write("### 📄 Data Preview (First 5 Rows)")
         st.dataframe(df_input.head())
 
@@ -243,7 +115,7 @@ with selected_tabs[0]:
             
             st.markdown("---")
             
-            # RESTORED: Key Summary Metrics (KPIs)
+            # Key Summary Metrics (KPIs)
             st.subheader("📊 Payroll Summary Metrics")
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Net Payout", f"LKR {df_final['Net Salary'].sum():,.2f}")
@@ -270,7 +142,7 @@ with selected_tabs[0]:
                 save_payroll_to_db(df_final, sel_month, sel_year)
                 st.success("Archived successfully!")
 
-            # RESTORED: Individual Employee Downloads
+            # Individual Employee Downloads
             st.markdown("---")
             st.subheader("👤 Individual Employee Quick-View & PDF")
             for i, row in df_final.iterrows():
