@@ -2,6 +2,11 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 import hashlib
+import logging
+
+# Configure Logging
+logging.basicConfig(filename='system.log', level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 DB_NAME = "property_payroll.db"
 
@@ -12,51 +17,34 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # 1. Ensure the base table exists
+    # 1. Base History Table
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                emp_id TEXT, 
-                emp_name TEXT, 
-                month TEXT, 
-                year INTEGER, 
-                basic_salary REAL, 
-                gross_salary REAL, 
-                total_deduction REAL, 
-                net_salary REAL, 
-                processed_date TIMESTAMP)''')
+                emp_id TEXT, emp_name TEXT, month TEXT, year INTEGER, 
+                basic_salary REAL, gross_salary REAL, total_deduction REAL, 
+                net_salary REAL, processed_date TIMESTAMP)''')
 
-    # MIGRATION: Automatically add missing columns if they don't exist
-    # I have added epf_employee to this list to fix your specific error.
+    # Migration Loop
     needed_columns = [
-        "nopay_amount REAL",
-        "total_tax REAL",
-        "epf_employee REAL",
-        "epf_company REAL",
-        "etf_company REAL"
+        "nopay_amount REAL", "total_tax REAL", 
+        "epf_employee REAL", "epf_company REAL", "etf_company REAL"
     ]
-    
     for col_def in needed_columns:
-        col_name = col_def.split()[0]
         try:
             c.execute(f"ALTER TABLE payroll_history ADD COLUMN {col_def}")
         except sqlite3.OperationalError:
-            # Column already exists or table is locked, skip it
             pass
 
-    # 2. Employee Master
+    # 2. Employees & 3. Users
     c.execute('CREATE TABLE IF NOT EXISTS employees (emp_id TEXT PRIMARY KEY, name TEXT, designation TEXT, department TEXT, nic TEXT, bank_name TEXT, account_no TEXT, joined_date TEXT)')
-
-    # 3. User Table
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY, 
-                password TEXT, 
-                role TEXT)''')
+    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
     
-    # Create default admin if not exists
+    # Default Admin
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
         admin_pw = hash_password("admin123")
         c.execute("INSERT INTO users VALUES ('admin', ?, 'Admin')", (admin_pw,))
+        logging.info("System Initialized: Default Admin account created.")
         
     conn.commit()
     conn.close()
@@ -68,8 +56,11 @@ def add_user(username, password, role):
     try:
         c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hash_password(password), role))
         conn.commit()
+        logging.info(f"ADMIN ACTION: New user '{username}' ({role}) created.")
         return True
-    except: return False
+    except Exception as e:
+        logging.error(f"Failed to create user {username}: {e}")
+        return False
     finally: conn.close()
 
 def get_all_users():
@@ -85,6 +76,7 @@ def delete_user(username):
     c.execute("DELETE FROM users WHERE username=?", (username,))
     conn.commit()
     conn.close()
+    logging.warning(f"ADMIN ACTION: User '{username}' was deleted.")
     return True
 
 def login_user(username, password):
@@ -93,7 +85,12 @@ def login_user(username, password):
     c.execute("SELECT role FROM users WHERE username=? AND password=?", (username, hash_password(password)))
     user = c.fetchone()
     conn.close()
-    return user[0] if user else None
+    if user:
+        logging.info(f"LOGIN SUCCESS: User '{username}' logged in as {user[0]}.")
+        return user[0]
+    else:
+        logging.warning(f"LOGIN FAILED: Attempt for username '{username}'.")
+        return None
 
 # --- EMPLOYEE MANAGEMENT ---
 def add_employee(emp_id, name, desig, dept, nic, bank, acc_no, date):
@@ -102,6 +99,7 @@ def add_employee(emp_id, name, desig, dept, nic, bank, acc_no, date):
     try:
         c.execute('INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (emp_id, name, desig, dept, nic, bank, acc_no, date))
         conn.commit()
+        logging.info(f"Employee Added: {emp_id} - {name}")
         return True
     except: return False
     finally: conn.close()
@@ -112,6 +110,7 @@ def update_employee(emp_id, name, desig, dept, nic, bank, acc_no, date):
     c.execute('UPDATE employees SET name=?, designation=?, department=?, nic=?, bank_name=?, account_no=?, joined_date=? WHERE emp_id=?', (name, desig, dept, nic, bank, acc_no, date, emp_id))
     conn.commit()
     conn.close()
+    logging.info(f"Employee Updated: {emp_id}")
 
 def delete_employee(emp_id):
     conn = sqlite3.connect(DB_NAME)
@@ -119,6 +118,7 @@ def delete_employee(emp_id):
     c.execute("DELETE FROM employees WHERE emp_id=?", (emp_id,))
     conn.commit()
     conn.close()
+    logging.warning(f"Employee Deleted: {emp_id}")
 
 def get_all_employees():
     conn = sqlite3.connect(DB_NAME)
@@ -142,23 +142,20 @@ def save_payroll_to_db(df, month, year):
     db_data['year'] = year
     db_data['processed_date'] = datetime.now()
     
-    # Mapping columns to match DB schema exactly
     subset = db_data[[
-        'Employee ID', 'Name', 'month', 'year', 
-        'Basic salary', 'Gross Salary', 'Nopay Amount', 'Total_Tax', 
-        'EPF_Employee_Amt', 'Total Deduction', 'Net Salary', 
-        'EPF_Company_Amt', 'ETF_Company_Amt', 'processed_date'
+        'Employee ID', 'Name', 'month', 'year', 'Basic salary', 'Gross Salary', 
+        'Nopay Amount', 'Total_Tax', 'EPF_Employee_Amt', 'Total Deduction', 
+        'Net Salary', 'EPF_Company_Amt', 'ETF_Company_Amt', 'processed_date'
     ]]
-    
     subset.columns = [
-        'emp_id', 'emp_name', 'month', 'year',
-        'basic_salary', 'gross_salary', 'nopay_amount', 'total_tax',
-        'epf_employee', 'total_deduction', 'net_salary',
-        'epf_company', 'etf_company', 'processed_date'
+        'emp_id', 'emp_name', 'month', 'year', 'basic_salary', 'gross_salary', 
+        'nopay_amount', 'total_tax', 'epf_employee', 'total_deduction', 
+        'net_salary', 'epf_company', 'etf_company', 'processed_date'
     ]
     
     subset.to_sql('payroll_history', conn, if_exists='append', index=False)
     conn.close()
+    logging.info(f"ARCHIVE: Saved payroll history for {month} {year} ({len(df)} records).")
 
 def fetch_history(month, year):
     conn = sqlite3.connect(DB_NAME)
