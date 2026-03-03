@@ -227,7 +227,7 @@ init_db()
 # 2. Page Configuration
 st.set_page_config(page_title="Pitch Capital Payroll", layout="wide", page_icon="🏢")
 
-# --- LOGIN LOGIC ---
+# --- LOGIN LOGIC ---_
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user_role'] = None
