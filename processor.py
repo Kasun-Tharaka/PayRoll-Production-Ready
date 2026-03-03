@@ -55,7 +55,7 @@ def process_payroll_data(df_excel, config):
         
         df_merged[numeric_cols] = df_merged[numeric_cols].fillna(0.0)
 
-        # --- CALCULATION LOGIC ---
+        # --- CALCULATION LOGIC ---_
         df_merged['Gross Salary'] = df_merged['Basic salary'] + df_merged['Reimburse allowances'] + df_merged['Travelling allowances']
         
         working_days = config.get('working_days', 30)
@@ -94,5 +94,5 @@ def process_payroll_data(df_excel, config):
         return df_merged
 
     except Exception as e:
-        logging.error(f"CRITICAL ERROR in Payroll Calculation: {str(e)}")
+        logging.error(f"CRITICAL ERROR in the Payroll Calculation: {str(e)}")
         raise e
