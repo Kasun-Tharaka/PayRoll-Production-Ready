@@ -20,7 +20,7 @@ def process_payroll_data(df_excel, config):
         
         df_excel['emp_id'] = df_excel['emp_id'].astype(str).str.strip()
         
-        # --- STEP 1.5: REMOVE DUPLICATE COLUMNS FROM EXCEL ---
+        # STEP 1.5: REMOVE DUPLICATE COLUMNS FROM EXCEL ---
         conflicting_cols = ['Name', 'name', 'Designation', 'designation', 'Department', 'department', 
                             'NIC', 'nic', 'Bank', 'bank_name', 'Account', 'account_no', 'Joined Date', 'joined_date']
         df_excel = df_excel.drop(columns=[c for c in conflicting_cols if c in df_excel.columns], errors='ignore')
