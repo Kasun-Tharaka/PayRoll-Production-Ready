@@ -40,6 +40,7 @@ def create_single_pdf(row, month, year):
     pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Horizontal Line
     pdf.ln(5)
     
+
     # --- 2. EMPLOYEE DETAILS ---
     pdf.set_font('helvetica', 'B', 11)
     pdf.cell(0, 6, "Employee Details", ln=True)
@@ -61,6 +62,7 @@ def create_single_pdf(row, month, year):
     pdf.ln(5)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(5)
+    
     
     # --- 3. FINANCIALS TABLE (Earnings | Deductions) ---
     pdf.set_font('helvetica', 'B', 10)
