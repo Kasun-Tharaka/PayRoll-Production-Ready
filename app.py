@@ -15,13 +15,16 @@
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 # init_db()
 
+
 # # 2. Page Configuration
 # st.set_page_config(page_title="Pitch Capital Payroll", layout="wide", page_icon="🏢")
+
 
 # # --- LOGIN LOGIC ---
 # if 'logged_in' not in st.session_state:
 #     st.session_state['logged_in'] = False
 #     st.session_state['user_role'] = None
+
 
 # def login_page():
 #     st.title("🔐 Payroll System Login")
@@ -37,9 +40,12 @@
 #             else:
 #                 st.error("Invalid Username or Password")
 
+
 # if not st.session_state['logged_in']:
 #     login_page()
 #     st.stop()
+
+
 
 # # ==========================================
 # # SIDEBAR SETUP
