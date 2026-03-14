@@ -85,6 +85,8 @@
 
 # selected_tabs = st.tabs(tabs_list)
 
+
+
 # # TAB 1: PAYROLL PROCESSING
 # with selected_tabs[0]:
 #     st.subheader(f"Step 1: Upload Data for {sel_month} {sel_year}")
@@ -130,6 +132,8 @@
 #                     pdf_bytes = create_single_pdf(row, sel_month, sel_year)
 #                     c_right.download_button("Download PDF", data=pdf_bytes, file_name=f"{row['Employee ID']}_{row['Name']}.pdf", mime="application/pdf", key=f"btn_{row['Employee ID']}_{i}")
 
+
+
 # # TAB 2: EMPLOYEE MANAGEMENT
 # with selected_tabs[1]:
 #     st.header("Manage Employee Database")
@@ -162,6 +166,8 @@
 #                     cb1, cb2 = st.columns(2)
 #                     if cb1.form_submit_button("Update"): update_employee(c_id, e_name, e_desig, e_dept, e_nic, e_bank, e_acc, e_date); st.rerun()
 #                     if cb2.form_submit_button("Delete", type="primary"): delete_employee(c_id); st.rerun()
+
+
 
 # # TAB 3: HISTORY
 # with selected_tabs[2]:
@@ -215,6 +221,7 @@
 #                 st.text_area("Log Output", log_content[-2000:], height=300)
 #         else:
 #             st.info("No logs generated yet.")
+
 
 
 import streamlit as st
